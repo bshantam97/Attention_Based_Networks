@@ -76,20 +76,47 @@ class PatchEmbed(nn.Module):
 
 class Attention(nn.Module):
 
-  def __init__(self, embed_dim, heads):
+  def __init__(self, embed_dim, heads, atten_p = 0, fc_p = 0):
 
     super(Attention, self).__init__()
     self.embed_dim = embed_dim # just for calculation take as 768
     self.heads = heads # Take 12 heads
     self.head_dim = embed_dim // heads # 64-> divided into 12 x 64 parts
     self.scale = self.head_dim ** -0.5 # To divide QK^(T)
+    self.atten_p = atten_p # Dropout probability applied to the query, key value vector
+    self.fc_p = fc_p # Dropout probability applied to the final fc layer
 
     assert (self.head_dim * heads == embed_dim)
 
     # Project the queries key and value h times with different learned linear projections
     # Multiply 3 becaause the output embedding dimensions will be a composition of 
     # Q, K and V
-    self.qkv = nn.Linear(self.head_dim, self.head_dim * 3)
+    self.qkv_projection = nn.Linear(self.head_dim, 3*self.head_dim, bias = False)
+
+    self.attention_dropout = nn.Dropout(atten_p)
 
     # After Concatenation, pass through a linear layer without changing dimensions
-    self.fc_out = nn.Linear(heads*self.head_dim, embed_size)
+    self.fc_out = nn.Linear(embed_dim, embed_dim) #768->768
+    self.fc_drop = nn.Dropout(fc_p)
+  
+  def forward(self, x):
+
+    """
+    Parameters
+    ----------
+    x: (n_samples, n_patches+1, embed_dim) 
+    Basically x is the patch embedding that will be input to the encoder. The one is added
+    for the extra learnable class embedding 
+
+    Returns
+    -------
+    torch.tensor
+    Shape: (n_samples, n_patches+1, embed_dim)
+    """
+    batch_size, n_tokens, embed_dim = x.shape()
+    qkv = self.qkv_projection(x)
+    # Now because we have an image which is a 3D Tensor 5 add 3 channels while reshaping
+    qkv = qkv.reshape(
+        batch_size, n_tokens, 3, self.heads, self.head_dim
+        )
+    
