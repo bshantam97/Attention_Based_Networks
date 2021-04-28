@@ -145,3 +145,5 @@ class Attention(nn.Module):
 # attn = Attention(embed_dim = 768, heads = 1)
 # patch_embed = PatchEmbed(img_size = 224, patch_size = 14, in_chans = 3, embed_dim = 768)
 # image = torch.randn((3, 3, 224, 224))
+# patch = patch_embed(image)
+# qkv = attn(patch)
