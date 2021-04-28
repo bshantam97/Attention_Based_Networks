@@ -74,11 +74,11 @@ class PatchEmbed(nn.Module):
 
     return x
 
-class Attention(nn.Module):
+class MultiHeadAttention(nn.Module):
 
   def __init__(self, embed_dim, heads, atten_p = 0, fc_p = 0):
 
-    super(Attention, self).__init__()
+    super(MultiHeadAttention, self).__init__()
     self.embed_dim = embed_dim # just for calculation take as 768
     self.heads = heads # Take 12 heads
     self.head_dim = embed_dim // heads # 64-> divided into 12 x 64 parts
