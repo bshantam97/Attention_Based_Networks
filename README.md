@@ -6,3 +6,4 @@ With the Computer Vision community fast realizing the benefits of the transforme
 
 ### Research paper references
 1. Vision Transformer: https://arxiv.org/pdf/2010.11929.pdf
+2. Data Efficient Image Transformer: https://arxiv.org/abs/2012.12877
