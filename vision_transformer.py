@@ -141,8 +141,44 @@ class MultiHeadAttention(nn.Module):
     weighted_average_proj = self.fc_drop(weighted_average_proj)
 
     return weighted_average_proj
+    
+class MLP(nn.Module):
 
-# attn = Attention(embed_dim = 768, heads = 1)
+  def __init__(self, in_features, hidden_features = None, out_features = None, drop = 0):
+    """
+    Multi Layer Perceptron
+    Parameters
+    ----------
+    in_features: Number of input features
+    hidden features: Number of hidden features
+    out_features: Number of output features
+    dropout: Dropout probability
+
+    Attributes
+    ----------
+    fc1: nn.Linear
+        The first linear layer
+    activation = nn.GELU
+        Gaussian Error Linear Unit
+    fc2: nn.Linear
+        Second Linear layer
+    """
+
+    super(MLP, self).__init__()
+    self.fc1 = nn.Linear(in_features = in_features, out_features = hidden_features)
+    self.activation = nn.GELU()
+    self.fc2 = nn.Linear(in_features = hidden_features, out_features = out_features)
+    self.dropout = nn.Dropout(drop)
+
+  def forward(self, x):
+    x = self.fc1(x)
+    x = self.activation(x)
+    x = self.activation(x)
+    x = self.fc2(x) # (batch_size, n_patches+1, out_features)
+
+    return x
+
+# attn = MultiHeadAttention(embed_dim = 768, heads = 1)
 # patch_embed = PatchEmbed(img_size = 224, patch_size = 14, in_chans = 3, embed_dim = 768)
 # image = torch.randn((3, 3, 224, 224))
 # patch = patch_embed(image)
