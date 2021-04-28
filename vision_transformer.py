@@ -3,7 +3,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-import torch.nn
+import torch.nn as nn
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import torchvision
@@ -113,10 +113,35 @@ class Attention(nn.Module):
     torch.tensor
     Shape: (n_samples, n_patches+1, embed_dim)
     """
-    batch_size, n_tokens, embed_dim = x.shape()
+    batch_size, n_tokens, embed_dim = x.shape
     qkv = self.qkv_projection(x)
     # Now because we have an image which is a 3D Tensor 5 add 3 channels while reshaping
     qkv = qkv.reshape(
         batch_size, n_tokens, 3, self.heads, self.head_dim
         )
-    
+    qkv = qkv.permute(2, 0, 3, 1, 4) # (3, batch_size, self.heads,n_patches+1, head_dim)
+    queries,keys,values = qkv.chunk(3, dim = 0) #(1, batch_size, self.heads, n_patches+1, head_dim)
+    queries,keys,values = queries[0], keys[0], values[0] # (batch_size, self.heads, n_patches+1, head_dim)
+
+    # Now Lets use einsum to compute the softmax
+    # Query Shape: (batch_size, self.heads, n_patches+1, head_dim)
+    # Key Shape: (batch_size, self.heads, n_patches+1, head_dim)
+    # Value Shape: (batch_size, self.heads, n_patches+1, head_dim)
+    # QK^(T) Shape = (batch_size, self.heads, n_patches+1, n_patches+1)
+    # below b->batch_size, h->number of heads, q-> query length, k->key length, d->head_dim
+    qk = torch.einsum('bhqd,bhkd->bhqk',[queries,keys])
+    # Take softmax along the key dimension
+    attention = torch.softmax(qk/self.scale**(0.5), dim = 3)
+    attention = self.attention_dropout(attention)
+    weighted_average = torch.einsum('bhqk, bhvd->bqhd',[attention, values]).reshape(
+        batch_size, n_tokens, self.embed_dim
+    )
+
+    weighted_average_proj = self.fc_out(weighted_average)
+    weighted_average_proj = self.fc_drop(weighted_average_proj)
+
+    return weighted_average_proj
+
+# attn = Attention(embed_dim = 768, heads = 1)
+# patch_embed = PatchEmbed(img_size = 224, patch_size = 14, in_chans = 3, embed_dim = 768)
+# image = torch.randn((3, 3, 224, 224))
