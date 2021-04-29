@@ -76,7 +76,7 @@ class PatchEmbed(nn.Module):
 
 class MultiHeadAttention(nn.Module):
 
-  def __init__(self, embed_dim, heads, atten_p = 0, fc_p = 0):
+  def __init__(self, embed_dim, heads, atten_p = 0, fc_p = 0, qkv_bias = False):
 
     super(MultiHeadAttention, self).__init__()
     self.embed_dim = embed_dim # just for calculation take as 768
@@ -91,7 +91,7 @@ class MultiHeadAttention(nn.Module):
     # Project the queries key and value h times with different learned linear projections
     # Multiply 3 becaause the output embedding dimensions will be a composition of 
     # Q, K and V
-    self.qkv_projection = nn.Linear(self.head_dim, 3*self.head_dim, bias = False)
+    self.qkv_projection = nn.Linear(self.head_dim, 3*self.head_dim, bias = qkv_bias)
 
     self.attention_dropout = nn.Dropout(atten_p)
 
@@ -141,7 +141,7 @@ class MultiHeadAttention(nn.Module):
     weighted_average_proj = self.fc_drop(weighted_average_proj)
 
     return weighted_average_proj
-    
+
 class MLP(nn.Module):
 
   def __init__(self, in_features, hidden_features = None, out_features = None, drop = 0):
@@ -173,11 +173,22 @@ class MLP(nn.Module):
   def forward(self, x):
     x = self.fc1(x)
     x = self.activation(x)
-    x = self.activation(x)
+    x = self.dropout(x)
     x = self.fc2(x) # (batch_size, n_patches+1, out_features)
 
     return x
 
+class EncoderBlock(nn.Module):
+
+    def __init__(self,embed_dim, heads, atten_p = 0, fc_p = 0,qkv_bias = False, mlp_ratio = 4):
+        super(EncoderBlock, self).__init__()
+        self.mha = MultiHeadAttention(
+            embed_dim = embed_dim, heads = heads, atten_p = atten_p, fc_p = fc_p, qkv_bias = qkv_bias
+            )
+        
+
+    def forward(self, x):
+        pass
 # attn = MultiHeadAttention(embed_dim = 768, heads = 1)
 # patch_embed = PatchEmbed(img_size = 224, patch_size = 14, in_chans = 3, embed_dim = 768)
 # image = torch.randn((3, 3, 224, 224))
