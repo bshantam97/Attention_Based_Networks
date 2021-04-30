@@ -122,7 +122,6 @@ class MultiHeadAttention(nn.Module):
     qkv = qkv.permute(2, 0, 3, 1, 4) # (3, batch_size, self.heads,n_patches+1, head_dim)
     queries,keys,values = qkv.chunk(3, dim = 0) #(1, batch_size, self.heads, n_patches+1, head_dim)
     queries,keys,values = queries[0], keys[0], values[0] # (batch_size, self.heads, n_patches+1, head_dim)
-
     # Now Lets use einsum to compute the softmax
     # Query Shape: (batch_size, self.heads, n_patches+1, head_dim)
     # Key Shape: (batch_size, self.heads, n_patches+1, head_dim)
@@ -218,7 +217,7 @@ class EncoderBlock(nn.Module):
     x = x + self.MLP(self.LayerNorm2(x))
 
     return x
-
+    
 class VisionTransformer(nn.Module):
 
   """
@@ -246,10 +245,10 @@ class VisionTransformer(nn.Module):
     The total number of classes for classification  
   Attributes
   ----------
-  patch_embd: The Patch Embedding
+  patch_embed: The Patch Embedding
   cls_token: nn.Parameter
     It is a learnable parameter that will represent the first token in the sequence
-  pos_embd: The position Embedding
+  pos_embed: The position Embedding
     Positional embedding for the class token and the image patches
     It has (n_patches+cls_token) * (Embed_dim) elements
   pos_drop: nn.Dropout
@@ -283,16 +282,58 @@ class VisionTransformer(nn.Module):
                                   patch_size = patch_size,
                                   in_chans = in_chans,
                                   embed_dim = embed_dim)
-    self.cls_token = nn.Parameter(torch.zeros(1,1,embed_dim))
     self.pos_embed = nn.Parameter(torch.zeros(1, 1+self.patch_embed.n_patches, embed_dim))
+    self.cls_token = nn.Parameter(torch.zeros(1,1,embed_dim))
+    
     self.pos_drop = nn.Dropout(p = fc_p)
-    self.norm = nn.LayerNorm(embed_dim)
-    self.head = nn.Linear(embed_dim, num_classes)
+    self.norm = nn.LayerNorm(embed_dim) # Normalization before the final output pass
+    self.head = nn.Linear(embed_dim, num_classes) # For the final output pass
 
   def forward(self, x):
     """
-    
+    The forward pass method
+    PARAMETERS
+    ----------
+    x: torch.Tensor
+      This is a 4D input image with size (batch size, in_chans, img_size, img_size)
+
+    RETURNS
+    -------
+    logits: torch.tensor
+      The logits over all the classes (batch_size, num_classes)
     """
+    # Create the Patch Embedding
+    x = self.patch_embed(x)
+    print(self.cls_token.shape)
+    # Expand the class tokens along batch dimension
+    cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # (n_samples, 1, embed_dim)
+
+    # One can imagine it being something like
+    # Concatenation along token dimension
+    # Concatenated on top of the embedding
+
+    x = torch.cat((cls_token, x), dim = 1)
+
+    # Add the positional information to the embedding
+    x = x + self.pos_embed
+    x = self.pos_drop(x)
+
+    for layers in self.layers:
+      x = layers(x)
+    x = self.norm(x)
+
+    # Hope that this final class embedding that we encoded to the top encodes the information
+    # about the image
+    final_cls_token = x[:,0]
+    x = self.head(final_cls_token)
+
+    return x
+# encoder = EncoderBlock(embed_dim = 768, heads = 1, mlp_ratio = 4)
+vision_transformer = VisionTransformer()
+# attn = MultiHeadAttention(embed_dim = 768, heads = 12)
+image = torch.randn((1,3,384,384))
+output = vision_transformer(image)
+output.shape
 
 # encoder = EncoderBlock(embed_dim = 768, heads = 1, mlp_ratio = 4)
 # attn = MultiHeadAttention(embed_dim = 768, heads = 12)
