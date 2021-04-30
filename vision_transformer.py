@@ -219,6 +219,15 @@ class EncoderBlock(nn.Module):
 
     return x
 
+class VisionTransformer(nn.Module):
+
+  def __init__(self):
+    super(VisionTransformer, self).__init__()
+    pass
+
+  def forward(self, x):
+    pass
+
 # encoder = EncoderBlock(embed_dim = 768, heads = 1, mlp_ratio = 4)
 # attn = MultiHeadAttention(embed_dim = 768, heads = 12)
 # patch_embed = PatchEmbed(img_size = 224, patch_size = 14, in_chans = 3, embed_dim = 768)
