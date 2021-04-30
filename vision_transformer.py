@@ -76,7 +76,7 @@ class PatchEmbed(nn.Module):
 
 class MultiHeadAttention(nn.Module):
 
-  def __init__(self, embed_dim, heads, atten_p = 0, fc_p = 0, qkv_bias = False):
+  def __init__(self, embed_dim, heads, qkv_bias = False, atten_p = 0, fc_p = 0):
 
     super(MultiHeadAttention, self).__init__()
     self.embed_dim = embed_dim # just for calculation take as 768
@@ -91,7 +91,7 @@ class MultiHeadAttention(nn.Module):
     # Project the queries key and value h times with different learned linear projections
     # Multiply 3 becaause the output embedding dimensions will be a composition of 
     # Q, K and V
-    self.qkv_projection = nn.Linear(self.head_dim, 3*self.head_dim, bias = qkv_bias)
+    self.qkv_projection = nn.Linear(self.embed_dim, 3*self.embed_dim, bias = qkv_bias)
 
     self.attention_dropout = nn.Dropout(atten_p)
 
@@ -180,17 +180,49 @@ class MLP(nn.Module):
 
 class EncoderBlock(nn.Module):
 
-    def __init__(self,embed_dim, heads, atten_p = 0, fc_p = 0,qkv_bias = False, mlp_ratio = 4):
-        super(EncoderBlock, self).__init__()
-        self.mha = MultiHeadAttention(
-            embed_dim = embed_dim, heads = heads, atten_p = atten_p, fc_p = fc_p, qkv_bias = qkv_bias
-            )
-        
+  def __init__(self, embed_dim, heads, mlp_ratio, atten_p = 0, fc_p = 0, qkv_bias = False):
+    """Encoder Block
+    Parameters
+    ----------
+    embed_dim:int
+      The embedding dimension of the input patches
+    heads: int
+      Number of head in the transformer encoder
+    mlp_ratio: float
+      determines the MLP hidden dimension size with respect to embed_dim
+    qkv_bias: bool
+      If this is true then it includes the bias in query, key and value projections
 
-    def forward(self, x):
-        pass
-# attn = MultiHeadAttention(embed_dim = 768, heads = 1)
+    Attributes
+    ----------
+
+    norm1, norm2: LayerNorm
+      Layer Normalization
+    mha: Multi head attention
+    MLP: The multi layer perceptron module
+    """
+    super(EncoderBlock, self).__init__()
+    self.mha = MultiHeadAttention(
+        embed_dim = embed_dim, heads = heads, atten_p = atten_p,
+        fc_p = fc_p, qkv_bias = qkv_bias
+        )
+    # Provides faster training and some amount of regularization
+    self.LayerNorm1 = nn.LayerNorm(embed_dim)
+    self.LayerNorm2 = nn.LayerNorm(embed_dim)
+    hidden_features = int(embed_dim * mlp_ratio)
+    self.MLP = MLP(in_features = embed_dim, 
+                   hidden_features = hidden_features,
+                   out_features = embed_dim)
+  def forward(self, x):
+    x = x + self.mha(self.LayerNorm1(x))
+    x = x + self.MLP(self.LayerNorm2(x))
+
+    return x
+
+# encoder = EncoderBlock(embed_dim = 768, heads = 1, mlp_ratio = 4)
+# attn = MultiHeadAttention(embed_dim = 768, heads = 12)
 # patch_embed = PatchEmbed(img_size = 224, patch_size = 14, in_chans = 3, embed_dim = 768)
 # image = torch.randn((3, 3, 224, 224))
 # patch = patch_embed(image)
-# qkv = attn(patch)
+# output1 = encoder(patch)
+# output2 = attn(patch)
