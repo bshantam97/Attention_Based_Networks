@@ -221,12 +221,78 @@ class EncoderBlock(nn.Module):
 
 class VisionTransformer(nn.Module):
 
-  def __init__(self):
+  """
+  VISION TRANSFORMER
+
+  Parameters
+  ----------
+  img_size: int
+    The input size of the image
+  patch_size: int
+    The patch size to be extracted from the input image
+  in_chans: int
+    The number of channels in the input image
+  embed_dim: int
+    The embedding dimension of the patch input
+  n_heads: int
+    Number of heads in MultiHead attention
+  atten_p, fc_p: float
+    dropout probability
+  mlp_ratio: float
+    Determine the size of the hidden unit
+  num_layers: int
+    The number of encoder blocks stacked together
+  num_classes: int
+    The total number of classes for classification  
+  Attributes
+  ----------
+  patch_embd: The Patch Embedding
+  cls_token: nn.Parameter
+    It is a learnable parameter that will represent the first token in the sequence
+  pos_embd: The position Embedding
+    Positional embedding for the class token and the image patches
+    It has (n_patches+cls_token) * (Embed_dim) elements
+  pos_drop: nn.Dropout
+    Dropout layer
+  """
+  def __init__(self, 
+               img_size = 384,
+               patch_size = 16, 
+               in_chans = 3, 
+               embed_dim = 768, 
+               n_heads = 12,
+               num_classes = 1000,
+               num_layers = 12,
+               qkv_bias = False,
+               atten_p = 0,
+               fc_p = 0,
+               mlp_ratio = 4.0):
     super(VisionTransformer, self).__init__()
-    pass
+    self.embed_dim = embed_dim
+    self.layers = nn.ModuleList([
+                                 EncoderBlock(
+                                     embed_dim = embed_dim,
+                                     heads = n_heads,
+                                     mlp_ratio = mlp_ratio,
+                                     atten_p = atten_p,
+                                     fc_p = fc_p,
+                                     qkv_bias = qkv_bias
+                                 ) for _ in range(num_layers)
+    ])
+    self.patch_embed = PatchEmbed(img_size = img_size, 
+                                  patch_size = patch_size,
+                                  in_chans = in_chans,
+                                  embed_dim = embed_dim)
+    self.cls_token = nn.Parameter(torch.zeros(1,1,embed_dim))
+    self.pos_embed = nn.Parameter(torch.zeros(1, 1+self.patch_embed.n_patches, embed_dim))
+    self.pos_drop = nn.Dropout(p = fc_p)
+    self.norm = nn.LayerNorm(embed_dim)
+    self.head = nn.Linear(embed_dim, num_classes)
 
   def forward(self, x):
-    pass
+    """
+    
+    """
 
 # encoder = EncoderBlock(embed_dim = 768, heads = 1, mlp_ratio = 4)
 # attn = MultiHeadAttention(embed_dim = 768, heads = 12)
