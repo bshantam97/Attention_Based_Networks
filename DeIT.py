@@ -9,7 +9,6 @@ import torch.optim as optim
 import torchvision
 import torch.nn.functional as F
 from torchvision import models, datasets, transforms
-from torch.utils.tensorboard import SummaryWriter
 
 class PatchEmbed(nn.Module):
   """Splits the image into patches and then embeds them
@@ -73,3 +72,70 @@ class PatchEmbed(nn.Module):
     x = x.transpose(1,2) # (n_samples, n_patches, embed_dim) # transposes the index 1 with index 2
 
     return x
+
+class MultiHeadAttention(nn.Module):
+
+  def __init__(self, embed_dim, heads, qkv_bias = False, atten_p = 0, fc_p = 0):
+
+    super(MultiHeadAttention, self).__init__()
+    self.embed_dim = embed_dim # just for calculation take as 768
+    self.heads = heads # Take 12 heads
+    self.head_dim = embed_dim // heads # 64-> divided into 12 x 64 parts
+    self.scale = self.head_dim ** -0.5 # To divide QK^(T)
+    self.atten_p = atten_p # Dropout probability applied to the query, key value vector
+    self.fc_p = fc_p # Dropout probability applied to the final fc layer
+
+    assert (self.head_dim * heads == embed_dim)
+
+    # Project the queries key and value h times with different learned linear projections
+    # Multiply 3 becaause the output embedding dimensions will be a composition of 
+    # Q, K and V
+    self.qkv_projection = nn.Linear(self.embed_dim, 3*self.embed_dim, bias = qkv_bias)
+
+    self.attention_dropout = nn.Dropout(atten_p)
+
+    # After Concatenation, pass through a linear layer without changing dimensions
+    self.fc_out = nn.Linear(embed_dim, embed_dim) #768->768
+    self.fc_drop = nn.Dropout(fc_p)
+  
+  def forward(self, x):
+
+    """
+    Parameters
+    ----------
+    x: (n_samples, n_patches+1, embed_dim) 
+    Basically x is the patch embedding that will be input to the encoder. The one is added
+    for the extra learnable class embedding 
+
+    Returns
+    -------
+    torch.tensor
+    Shape: (n_samples, n_patches+1, embed_dim)
+    """
+    batch_size, n_tokens, embed_dim = x.shape
+    qkv = self.qkv_projection(x)
+    # Now because we have an image which is a 3D Tensor 5 add 3 channels while reshaping
+    qkv = qkv.reshape(
+        batch_size, n_tokens, 3, self.heads, self.head_dim
+        )
+    qkv = qkv.permute(2, 0, 3, 1, 4) # (3, batch_size, self.heads,n_patches+1, head_dim)
+    queries,keys,values = qkv.chunk(3, dim = 0) #(1, batch_size, self.heads, n_patches+1, head_dim)
+    queries,keys,values = queries[0], keys[0], values[0] # (batch_size, self.heads, n_patches+1, head_dim)
+    # Now Lets use einsum to compute the softmax
+    # Query Shape: (batch_size, self.heads, n_patches+1, head_dim)
+    # Key Shape: (batch_size, self.heads, n_patches+1, head_dim)
+    # Value Shape: (batch_size, self.heads, n_patches+1, head_dim)
+    # QK^(T) Shape = (batch_size, self.heads, n_patches+1, n_patches+1)
+    # below b->batch_size, h->number of heads, q-> query length, k->key length, d->head_dim
+    qk = torch.einsum('bhqd,bhkd->bhqk',[queries,keys])
+    # Take softmax along the key dimension
+    attention = torch.softmax(qk/self.scale**(0.5), dim = 3)
+    attention = self.attention_dropout(attention)
+    weighted_average = torch.einsum('bhqk, bhvd->bqhd',[attention, values]).reshape(
+        batch_size, n_tokens, self.embed_dim
+    )
+
+    weighted_average_proj = self.fc_out(weighted_average)
+    weighted_average_proj = self.fc_drop(weighted_average_proj)
+
+    return weighted_average_proj
