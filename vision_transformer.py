@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from torchvision import models, datasets, transforms
 from torch.utils.tensorboard import SummaryWriter
 import PIL
+import math
 
 class PatchEmbed(nn.Module):
   """Splits the image into patches and then embeds them
@@ -351,7 +352,7 @@ def patchEmbedding(image_location):
   image_tensor = image_tensor(image)
   image_transform = image_transform(image_tensor)
   image_transform = image_transform.unsqueeze(0) # Add additional dimension as patch embed expects 4D input
-  patch_embed = PatchEmbed(224,16)
+  patch_embed = PatchEmbed(img_size = 224, patch_size = 16, in_chans = 3, embed_dim = 768)
   patches = patch_embed(image_transform)
   return patches
 
