@@ -10,6 +10,7 @@ import torchvision
 import torch.nn.functional as F
 from torchvision import models, datasets, transforms
 from torch.utils.tensorboard import SummaryWriter
+import PIL
 
 class PatchEmbed(nn.Module):
   """Splits the image into patches and then embeds them
@@ -329,11 +330,11 @@ class VisionTransformer(nn.Module):
 
     return x
 # encoder = EncoderBlock(embed_dim = 768, heads = 1, mlp_ratio = 4)
-vision_transformer = VisionTransformer()
-# attn = MultiHeadAttention(embed_dim = 768, heads = 12)
-image = torch.randn((1,3,384,384))
-output = vision_transformer(image)
-output.shape
+# vision_transformer = VisionTransformer()
+# # attn = MultiHeadAttention(embed_dim = 768, heads = 12)
+# image = torch.randn((1,3,384,384))
+# output = vision_transformer(image)
+# output.shape
 
 # encoder = EncoderBlock(embed_dim = 768, heads = 1, mlp_ratio = 4)
 # attn = MultiHeadAttention(embed_dim = 768, heads = 12)
@@ -342,3 +343,50 @@ output.shape
 # patch = patch_embed(image)
 # output1 = encoder(patch)
 # output2 = attn(patch)
+
+def patchEmbedding(image_location):
+  image = PIL.Image.open(image_location).convert('RGB')
+  image_tensor = torchvision.transforms.ToTensor()
+  image_transform = torchvision.transforms.CenterCrop(224)
+  image_tensor = image_tensor(image)
+  image_transform = image_transform(image_tensor)
+  image_transform = image_transform.unsqueeze(0) # Add additional dimension as patch embed expects 4D input
+  patch_embed = PatchEmbed(224,16)
+  patches = patch_embed(image_transform)
+  return patches
+
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, d_model, max_len=5000):
+        """
+        Inputs
+            d_model - Hidden dimensionality of the input.
+            max_len - Maximum length of a sequence to expect.
+        """
+        super().__init__()
+
+        # Create matrix of [SeqLen, HiddenDim] representing the positional encoding for max_len inputs
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+
+        # register_buffer => Tensor which is not a parameter, but should be part of the modules state.
+        # Used for tensors that need to be on the same device as the module.
+        # persistent=False tells PyTorch to not add the buffer to the state dict (e.g. when we save the model)
+        self.register_buffer('pe', pe, persistent=False)
+
+    def forward(self, x):
+        x = x + self.pe[:, :x.size(1)]
+        return x
+
+image_dir = '/content/drive/MyDrive/CATS_DOGS/CATS_DOGS/train/CAT/1.jpg'
+image_patch_embedding = patchEmbedding(image_location = image_dir)
+
+pe = PositionalEncoding(d_model = 768, max_len = 196)
+pe = pe(image_patch_embedding)
+image_PIL = torchvision.transforms.ToPILImage()
+final_embedding = image_PIL(pe)
+plt.imshow(final_embedding)
